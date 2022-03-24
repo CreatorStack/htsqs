@@ -2,7 +2,6 @@ package publisher
 
 import (
 	"context"
-	"encoding/json"
 )
 
 // Publisher is the interface clients can use to publish messages
