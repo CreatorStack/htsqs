@@ -3,6 +3,7 @@ package sns
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -37,6 +38,8 @@ type Publisher struct {
 func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 	b, err := json.Marshal(msg)
 
+	defaultMessageGroupID := "default"
+
 	if err != nil {
 		return err
 	}
@@ -44,6 +47,10 @@ func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 	input := &sns.PublishInput{
 		Message:  aws.String(string(b)),
 		TopicArn: &p.cfg.TopicArn,
+	}
+	// if the topic is a fifo topic, we need to set the message group id
+	if strings.Contains(strings.ToLower(*input.TopicArn), "fifo") {
+		input.MessageGroupId = &defaultMessageGroupID
 	}
 
 	_, err = p.sns.PublishWithContext(ctx, input)
