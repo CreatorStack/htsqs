@@ -34,7 +34,7 @@ type Publisher struct {
 
 // Publish allows SNS Publisher to implement the publisher.Publisher interface
 // and publish messages to an AWS SNS backend
-func (p *Publisher) Publish(ctx context.Context, msg json.Marshaler) error {
+func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 	b, err := json.Marshal(msg)
 
 	if err != nil {
