@@ -142,8 +142,9 @@ func (s *Subscriber) Consume() (<-chan *SQSMessage, <-chan error, error) {
 					continue
 				}
 
-				s.cfg.Logger.Printf("Found %d messages\n", len(msgs.Messages))
-				backoffCfg.Reset()
+				if len(msgs.Messages) > 0 {
+					s.cfg.Logger.Printf("Found %d messages on %v\n", len(msgs.Messages), s.cfg.SqsQueueURL)
+				}
 				// for each message, pass to output
 				for _, msg := range msgs.Messages {
 					messages <- &SQSMessage{
