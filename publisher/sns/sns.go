@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/google/uuid"
 )
 
 // sender is the interface to sns.SNS. Its sole purpose is to make
@@ -94,7 +95,9 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error 
 				return err
 			}
 
+			entryId := uuid.New().String()
 			requestEntry := &sns.PublishBatchRequestEntry{
+				Id:      aws.String(entryId),
 				Message: aws.String(string(b)),
 			}
 
