@@ -15,6 +15,7 @@ import (
 // Publisher.service and interface that we can mock for testing.
 type sender interface {
 	PublishWithContext(ctx context.Context, input *sns.PublishInput, o ...request.Option) (*sns.PublishOutput, error)
+	PublishBatchWithContext(ctx context.Context, input *sns.PublishBatchInput, o ...request.Option) (*sns.PublishBatchOutput, error)
 }
 
 // Config holds the info required to work with AWS SNS
@@ -54,6 +55,40 @@ func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 	}
 
 	_, err = p.sns.PublishWithContext(ctx, input)
+
+	return err
+}
+
+func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error {
+	defaultMessageGroupID := "default"
+
+	requestEntries := make([]*sns.PublishBatchRequestEntry, 0)
+
+	isFifo := strings.Contains(strings.ToLower(p.cfg.TopicArn), "fifo")
+
+	for _, msg := range msgs {
+		b, err := json.Marshal(msg)
+		if err != nil {
+			return err
+		}
+
+		requestEntry := &sns.PublishBatchRequestEntry{
+			Message: aws.String(string(b)),
+		}
+
+		if isFifo {
+			requestEntry.MessageGroupId = &defaultMessageGroupID
+		}
+
+		requestEntries = append(requestEntries, requestEntry)
+	}
+
+	input := &sns.PublishBatchInput{
+		PublishBatchRequestEntries: requestEntries,
+		TopicArn:                   &p.cfg.TopicArn,
+	}
+
+	_, err := p.sns.PublishBatchWithContext(ctx, input)
 
 	return err
 }
