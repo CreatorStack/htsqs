@@ -26,6 +26,31 @@ func TestPublisher(t *testing.T) {
 	require.Equal(t, *publishedMessage, `{"msg":"message"}`)
 }
 
+func TestPublisherBatch(t *testing.T) {
+	inputs := []interface{}{
+		jsonString(`{"key":"val1"}`),
+		jsonString(`{"key":"val2"}`),
+	}
+
+	queue := make(chan *string, len(inputs))
+	defer close(queue)
+
+	pubs := New(Config{})
+	pubs.sns = &snsPublisherMock{queue: queue}
+
+	require.NoError(t, pubs.PublishBatch(context.TODO(), inputs))
+
+	idx := 0
+	for v := range queue {
+		publishedMessage := *v
+		require.Equal(t, jsonString(publishedMessage), inputs[idx])
+		idx++
+		if idx >= len(inputs) {
+			break
+		}
+	}
+}
+
 func TestPublisherDefaults(t *testing.T) {
 
 	tt := []struct {

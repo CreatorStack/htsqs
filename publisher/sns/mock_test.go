@@ -15,3 +15,10 @@ func (p *snsPublisherMock) PublishWithContext(ctx context.Context, input *sns.Pu
 	p.queue <- input.Message
 	return &sns.PublishOutput{}, nil
 }
+
+func (p *snsPublisherMock) PublishBatchWithContext(ctx context.Context, input *sns.PublishBatchInput, o ...request.Option) (*sns.PublishBatchOutput, error) {
+	for _, entry := range input.PublishBatchRequestEntries {
+		p.queue <- entry.Message
+	}
+	return &sns.PublishBatchOutput{}, nil
+}
