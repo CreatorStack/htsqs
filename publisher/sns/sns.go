@@ -9,12 +9,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/google/uuid"
 )
 
 // sender is the interface to sns.SNS. Its sole purpose is to make
 // Publisher.service and interface that we can mock for testing.
 type sender interface {
 	PublishWithContext(ctx context.Context, input *sns.PublishInput, o ...request.Option) (*sns.PublishOutput, error)
+	PublishBatchWithContext(ctx context.Context, input *sns.PublishBatchInput, o ...request.Option) (*sns.PublishBatchOutput, error)
 }
 
 // Config holds the info required to work with AWS SNS
@@ -54,6 +56,74 @@ func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 	}
 
 	_, err = p.sns.PublishWithContext(ctx, input)
+
+	return err
+}
+
+// PublishBatch allows SNS Publisher to implement the publisher.Publisher interface
+// and publish messages in a single batch to an AWS SNS backend. Since AWS SNS batch
+// publish can only handle a maximum payload of 10 messages at a time, the messages
+// supplied will be published in batches of 10. For this reason, message sets are best
+// kept under 100 messages so that all messages can be published in 10 tries. In case
+// of failure when parsing or publishing any of the messages, this function will stop
+// further publishing and return an error
+func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error {
+	var (
+		defaultMessageGroupID = "default"
+		err                   error
+	)
+
+	isFifo := strings.Contains(strings.ToLower(p.cfg.TopicArn), "fifo")
+
+	var (
+		numPublishedMessages = 0
+		start                = 0
+		end                  = 10 // 10 is the maximum batch size for SNS.PublishBatch
+	)
+	if end > len(msgs) {
+		end = len(msgs)
+	}
+	for numPublishedMessages < len(msgs) {
+		var (
+			requestEntries = make([]*sns.PublishBatchRequestEntry, 0)
+		)
+		for idx := start; idx < end; idx++ {
+			msg := msgs[idx]
+
+			b, err := json.Marshal(msg)
+			if err != nil {
+				return err
+			}
+
+			entryId := uuid.New().String()
+			requestEntry := &sns.PublishBatchRequestEntry{
+				Id:      aws.String(entryId),
+				Message: aws.String(string(b)),
+			}
+
+			if isFifo {
+				requestEntry.MessageGroupId = &defaultMessageGroupID
+			}
+
+			requestEntries = append(requestEntries, requestEntry)
+		}
+
+		input := &sns.PublishBatchInput{
+			PublishBatchRequestEntries: requestEntries,
+			TopicArn:                   &p.cfg.TopicArn,
+		}
+		_, err = p.sns.PublishBatchWithContext(ctx, input)
+		if err != nil {
+			return err
+		}
+
+		numPublishedMessages += len(requestEntries)
+		start = end
+		end += 10
+		if end > len(msgs) {
+			end = len(msgs)
+		}
+	}
 
 	return err
 }
