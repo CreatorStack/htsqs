@@ -3,13 +3,15 @@ package sns
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
-	"github.com/google/uuid"
+	"github.com/creatorstack/htsqs/constants"
+	"github.com/creatorstack/htsqs/publisher/models"
 )
 
 // sender is the interface to sns.SNS. Its sole purpose is to make
@@ -67,10 +69,14 @@ func (p *Publisher) Publish(ctx context.Context, msg interface{}) error {
 // kept under 100 messages so that all messages can be published in 10 tries. In case
 // of failure when parsing or publishing any of the messages, this function will stop
 // further publishing and return an error
-func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error {
+func (p *Publisher) PublishBatch(ctx context.Context, msgs []models.Message) (map[string]error, int64, int64, error) {
 	var (
 		defaultMessageGroupID = "default"
+		publishResult         = make(map[string]error)
 		err                   error
+
+		errorCount   int64
+		successCount int64
 	)
 
 	isFifo := strings.Contains(strings.ToLower(p.cfg.TopicArn), "fifo")
@@ -78,7 +84,7 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error 
 	var (
 		numPublishedMessages = 0
 		start                = 0
-		end                  = 10 // 10 is the maximum batch size for SNS.PublishBatch
+		end                  = constants.MaxBatchSize
 	)
 	if end > len(msgs) {
 		end = len(msgs)
@@ -90,14 +96,13 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error 
 		for idx := start; idx < end; idx++ {
 			msg := msgs[idx]
 
-			b, err := json.Marshal(msg)
+			b, err := json.Marshal(msg.Data)
 			if err != nil {
-				return err
+				return publishResult, successCount, errorCount, err
 			}
 
-			entryId := uuid.New().String()
 			requestEntry := &sns.PublishBatchRequestEntry{
-				Id:      aws.String(entryId),
+				Id:      aws.String(msg.ID),
 				Message: aws.String(string(b)),
 			}
 
@@ -112,20 +117,38 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []interface{}) error 
 			PublishBatchRequestEntries: requestEntries,
 			TopicArn:                   &p.cfg.TopicArn,
 		}
-		_, err = p.sns.PublishBatchWithContext(ctx, input)
+		response, err := p.sns.PublishBatchWithContext(ctx, input)
 		if err != nil {
-			return err
+			return publishResult, successCount, errorCount, err
+		}
+
+		for _, errEntry := range response.Failed {
+			if errEntry != nil && errEntry.Id != nil {
+				errMsg := "publish error"
+				if errEntry.Message != nil {
+					errMsg = *errEntry.Message
+				}
+				publishResult[*errEntry.Id] = errors.New(errMsg)
+				errorCount++
+			}
+		}
+
+		for _, successEntry := range response.Successful {
+			if successEntry != nil && successEntry.Id != nil {
+				publishResult[*successEntry.Id] = nil
+				successCount++
+			}
 		}
 
 		numPublishedMessages += len(requestEntries)
 		start = end
-		end += 10
+		end += constants.MaxBatchSize
 		if end > len(msgs) {
 			end = len(msgs)
 		}
 	}
 
-	return err
+	return publishResult, successCount, errorCount, err
 }
 
 func defaultPublisherConfig(cfg *Config) {

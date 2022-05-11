@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/creatorstack/htsqs/publisher/models"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,9 +28,15 @@ func TestPublisher(t *testing.T) {
 }
 
 func TestPublisherBatch(t *testing.T) {
-	inputs := []interface{}{
-		jsonString(`{"key":"val1"}`),
-		jsonString(`{"key":"val2"}`),
+	inputs := []models.Message{
+		{
+			ID:   "1",
+			Data: jsonString(`{"key":"val1"}`),
+		},
+		{
+			ID:   "2",
+			Data: jsonString(`{"key":"val2"}`),
+		},
 	}
 
 	queue := make(chan *string, len(inputs))
@@ -38,12 +45,14 @@ func TestPublisherBatch(t *testing.T) {
 	pubs := New(Config{})
 	pubs.sns = &snsPublisherMock{queue: queue}
 
-	require.NoError(t, pubs.PublishBatch(context.TODO(), inputs))
+	_, _, _, err := pubs.PublishBatch(context.TODO(), inputs)
+
+	require.NoError(t, err)
 
 	idx := 0
 	for v := range queue {
 		publishedMessage := *v
-		require.Equal(t, jsonString(publishedMessage), inputs[idx])
+		require.Equal(t, jsonString(publishedMessage), inputs[idx].Data)
 		idx++
 		if idx >= len(inputs) {
 			break
