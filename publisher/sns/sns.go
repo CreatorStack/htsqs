@@ -77,15 +77,14 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []models.Message) (ma
 
 		errorCount   int64
 		successCount int64
-	)
 
-	isFifo := strings.Contains(strings.ToLower(p.cfg.TopicArn), "fifo")
-
-	var (
 		numPublishedMessages = 0
 		start                = 0
 		end                  = constants.MaxBatchSize
 	)
+
+	isFifo := strings.Contains(strings.ToLower(p.cfg.TopicArn), "fifo")
+
 	if end > len(msgs) {
 		end = len(msgs)
 	}
