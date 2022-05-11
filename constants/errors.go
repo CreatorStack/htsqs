@@ -1,9 +1,9 @@
 package constants
 
 const (
-	GenericError = "GenericError"
+	GenericPublishError = "GenericPublishError"
 )
 
 var ErrorStrings = map[string]string{
-	GenericError: "publish error",
+	GenericPublishError: "publish error",
 }

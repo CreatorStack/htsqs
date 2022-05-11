@@ -124,7 +124,7 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []models.Message) (ma
 
 		for _, errEntry := range response.Failed {
 			if errEntry != nil && errEntry.Id != nil {
-				errMsg := "publish error"
+				errMsg := constants.GenericPublishError
 				if errEntry.Message != nil {
 					errMsg = *errEntry.Message
 				}
