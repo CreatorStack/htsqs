@@ -152,6 +152,7 @@ func (p *Publisher) PublishBatch(ctx context.Context, msgs []models.Message) (ma
 
 func defaultPublisherConfig(cfg *Config) {
 	if cfg.AWSSession == nil {
+		println("creating new session for sns publisher")
 		cfg.AWSSession = session.Must(session.NewSession())
 	}
 }
